@@ -1,24 +1,58 @@
 <?php
 
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\RentalController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ArmadaController;
+use App\Http\Controllers\PaketController;
+use App\Http\Controllers\DriverController;
+use App\Models\AkunRental;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => redirect()->route('rental.index'));
+// Halaman Utama & Akun Pelanggan
+Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+Route::post('/simpan-akun', [DashboardController::class, 'simpanAkun']);
+Route::get('/hapus/{id}', [DashboardController::class, 'hapusAkun']);
 
+// 4 Halaman Informasi
+Route::get('/jenis-layanan', [DashboardController::class, 'jenisLayanan']);
+Route::get('/mitra-perawatan', [DashboardController::class, 'mitraPerawatan']);
+Route::get('/lokasi', [DashboardController::class, 'lokasi']);
+Route::get('/kontak', [DashboardController::class, 'kontak']);
 
-Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->name('login.proses');
-Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+// 3 Modul CRUD Utama (Armada, Paket, Driver)
+Route::resource('armada', ArmadaController::class);
+Route::resource('paket', PaketController::class);
+Route::resource('drivers', DriverController::class);
 
+// Form Login Pelanggan (sekaligus Edit Akun oleh Owner via ?id=...)
+Route::get('/login', function (Request $request) {
+    $akun = $request->has('id') ? AkunRental::find($request->id) : null;
+    return view('auth.login-pelanggan', compact('akun'));
+})->name('login');
 
-Route::middleware('auth')->group(function () {
+// Form Login Owner (Email & Password)
+Route::get('/login-owner', fn() => view('auth.login'));
 
-   
-    Route::get('/rental', [RentalController::class, 'index'])->name('rental.index');
+// Proses Submit Login Owner
+Route::post('/login', function (Request $request) {
+    $credentials = $request->validate([
+        'email' => 'required|email',
+        'password' => 'required',
+    ]);
 
-    
-    Route::middleware('role:admin')->group(function () {
-        Route::resource('rental', RentalController::class)->except(['index', 'show']);
-    });
-});
+    if (Auth::attempt($credentials)) {
+        $request->session()->regenerate();
+        return redirect()->intended('/');
+    }
+
+    return back()->withErrors(['email' => 'Email atau password salah.'])->onlyInput('email');
+})->name('login.proses');
+
+// Logout
+Route::get('/logout', function (Request $request) {
+    Auth::logout();
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+    return redirect('/');
+})->name('logout');
